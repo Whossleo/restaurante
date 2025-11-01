@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const UserService = require('../services/userService');
 const userService = new UserService();
 
-const SECRET_KEY = 'tu_clave_secreta_aqui'; // Usa .env idealmente
+const SECRET_KEY = 'tu_clave_secreta_aqui'; // Usa variable de entorno en producción
 
 // ==================== Middleware JWT ====================
 exports.verifyToken = (req, res, next) => {
@@ -33,26 +33,18 @@ exports.dashboard = async (req, res) => {
   }
 };
 
-// ==================== Registro ====================
+// ==================== Registro (vista) ====================
 exports.registerView = async (req, res) => {
   try {
-    // Si ya existe un admin, verificamos si el usuario logueado es admin
     const adminExistente = await Usuario.findOne({ rol: 'admin' });
 
     if (adminExistente) {
       const token = req.cookies.token;
+      if (!token) return res.status(403).send('Solo el admin puede registrar nuevos usuarios.');
 
-      if (!token) {
-        return res.status(403).send('Acceso denegado. Solo el admin puede registrar nuevos usuarios.');
-      }
-
-      try {
-        const decoded = jwt.verify(token, SECRET_KEY);
-        if (decoded.rol !== 'admin') {
-          return res.status(403).send('Acceso denegado. Solo el admin puede registrar nuevos usuarios.');
-        }
-      } catch (err) {
-        return res.status(403).send('Token inválido.');
+      const decoded = jwt.verify(token, SECRET_KEY);
+      if (decoded.rol !== 'admin') {
+        return res.status(403).send('Solo el admin puede registrar nuevos usuarios.');
       }
     }
 
@@ -63,7 +55,7 @@ exports.registerView = async (req, res) => {
   }
 };
 
-// ==================== Registro de usuario ====================
+// ==================== Registro (acción) ====================
 exports.register = async (req, res) => {
   try {
     const { nombre, apellido, email, password, rol } = req.body;
@@ -72,15 +64,13 @@ exports.register = async (req, res) => {
     if (existingUser)
       return res.render('register', { error: 'Usuario ya registrado' });
 
-    // Solo permitir crear admin si no existe uno
     if (rol === 'admin') {
       const adminExistente = await Usuario.findOne({ rol: 'admin' });
       if (adminExistente)
         return res.render('register', { error: 'Ya existe un administrador registrado' });
     } else {
-      // Si no es admin, validar que quien crea sea un admin
       const token = req.cookies.token;
-      if (!token) return res.render('register', { error: 'Acceso denegado. Solo el admin puede registrar nuevos usuarios.' });
+      if (!token) return res.render('register', { error: 'Solo el admin puede registrar nuevos usuarios.' });
 
       const decoded = jwt.verify(token, SECRET_KEY);
       if (decoded.rol !== 'admin') {
@@ -98,7 +88,8 @@ exports.register = async (req, res) => {
     res.render('register', { error: 'Error al registrar el usuario' });
   }
 };
-// ==================== Vista para registrar usuarios desde el panel del admin ====================
+
+// ==================== Vista para registrar usuarios desde el panel admin ====================
 exports.viewRegisterAdmin = async (req, res) => {
   try {
     const users = await Usuario.find();
@@ -119,7 +110,7 @@ exports.login = async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.render('login', { error: 'Contraseña incorrecta' });
 
-    // Crear token con datos del usuario y rol
+    // Crear token con datos del usuario
     const token = jwt.sign(
       { id: user._id, nombre: user.nombre, email: user.email, rol: user.rol },
       SECRET_KEY,
@@ -127,15 +118,14 @@ exports.login = async (req, res) => {
     );
 
     res.cookie('token', token, { httpOnly: true });
+
     switch (user.rol) {
       case 'admin':
         return res.redirect('/dashboard');
       case 'mesero':
         return res.redirect('/dashboard_mesero');
-      // case 'cocinero':
-      //   return res.redirect('/cocinero');
-      // case 'cajero':
-      //   return res.redirect('/cajero');
+      case 'cajero':
+        return res.redirect('/dashboard_cajero');
       default:
         return res.redirect('/login');
     }
@@ -175,12 +165,10 @@ exports.getUser = async (req, res) => {
 
 exports.createUser = async (req, res) => {
   try {
-    // Solo admin puede crear usuarios
     if (req.user.rol !== 'admin') {
       return res.status(403).json({ error: 'Solo el administrador puede crear usuarios' });
     }
 
-    // Validar que no haya más de un admin
     if (req.body.rol === 'admin') {
       const adminExistente = await Usuario.findOne({ rol: 'admin' });
       if (adminExistente)

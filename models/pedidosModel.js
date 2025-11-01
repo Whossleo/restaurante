@@ -2,9 +2,12 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const pedidoSchema = new Schema({
+  numeroPedido: {
+    type: Number
+  },
   mesa: { 
     type: Schema.Types.ObjectId, 
-    ref: 'Mesa', // referencia al modelo Mesa
+    ref: 'Mesa', 
     required: true 
   },
   platos: [
@@ -19,7 +22,7 @@ const pedidoSchema = new Schema({
   total: { type: Number, required: true },
   estado: {
     type: String,
-    enum: ['pendiente', 'enviado', 'entregado'],
+    enum: ['pendiente', 'pagado', 'enviado', 'entregado', 'cancelado'],
     default: 'pendiente',
     required: true
   },
@@ -27,6 +30,18 @@ const pedidoSchema = new Schema({
     type: Date, 
     default: Date.now 
   }
+});
+
+pedidoSchema.pre('save', async function(next) {
+  if (this.isNew) {
+    try {
+      const ultimo = await this.constructor.findOne({}, {}, { sort: { numeroPedido: -1 } });
+      this.numeroPedido = ultimo ? ultimo.numeroPedido + 1 : 1;
+    } catch (err) {
+      console.error('Error al generar número de pedido:', err);
+    }
+  }
+  next();
 });
 
 const Pedido = mongoose.model('Pedido', pedidoSchema);

@@ -13,58 +13,78 @@ router.get('/register', (req, res) => res.render('register', { error: null }));
 router.post('/login', userController.login);
 router.post('/register', userController.register);
 
+// 🔹 Vista para registrar admin (protegida)
 router.get('/register_admin', verifyToken, async (req, res) => {
-  const users = await Usuario.find();
-  res.render('register_admin', { user: req.user, users, error: null });
+  try {
+    const users = await Usuario.find();
+    res.render('register_admin', { user: req.user || {}, users, error: null }); // ✅ asegúrate que 'user' nunca sea undefined
+  } catch (error) {
+    res.render('register_admin', { user: req.user || {}, users: [], error: 'Error al cargar usuarios' });
+  }
 });
 
+// 🔹 Registrar nuevo usuario desde el panel admin
 router.post('/register_admin', verifyToken, async (req, res) => {
   try {
     const { nombre, apellido, email, password, rol } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
     const nuevoUsuario = new Usuario({ nombre, apellido, email, password: hashedPassword, rol });
     await nuevoUsuario.save();
+
     const users = await Usuario.find();
-    res.render('register_admin', { user: req.user, users, error: null });
+    res.render('register_admin', { user: req.user || {}, users, error: null });
   } catch (error) {
     const users = await Usuario.find();
-    res.render('register_admin', { user: req.user, users, error: 'Error al registrar usuario' });
+    res.render('register_admin', { user: req.user || {}, users, error: 'Error al registrar usuario' });
   }
 });
 
-// Dashboard protegido
+// 🔹 Dashboard principal
 router.get('/dashboard', verifyToken, async (req, res) => {
-  const users = await Usuario.find(); // todos los usuarios
-  res.render('dashboard', { usuario: req.user, users });
+  const users = await Usuario.find();
+  res.render('dashboard', { usuario: req.user || {}, users });
 });
 
-
-// 🟢 Dashboard de mesero
+// 🔹 Dashboard de mesero
 router.get('/dashboard_mesero', verifyToken, async (req, res) => {
   try {
-    // Si deseas que el mesero vea los clientes registrados:
     const users = await Usuario.find();
-
     res.render('dashboard_mesero', {
-      usuario: req.user, // datos del usuario logueado
-      users,             // lista de usuarios para el bucle EJS
+      usuario: req.user || {},
+      users,
+      error: null
     });
   } catch (error) {
-    console.error('Error al cargar dashboard del mesero:', error);
     res.render('dashboard_mesero', {
-      usuario: req.user,
+      usuario: req.user || {},
       users: [],
-      error: 'Error al cargar los usuarios',
+      error: 'Error al cargar usuarios'
     });
   }
 });
 
+//  Dashboard de cajero
+router.get('/dashboard_cajero', verifyToken, async (req, res) => {
+  try {
+    const users = await Usuario.find();
+    res.render('dashboard_cajero', {
+      usuario: req.user || {},
+      users,
+      error: null
+    });
+  } catch (error) {
+    res.render('dashboard_cajero', {
+      usuario: req.user || {},
+      users: [],
+      error: 'Error al cargar usuarios'
+    });
+  }
+});
 
-
-
+// 🔹 Logout
 router.get('/logout', (req, res) => {
-  res.clearCookie('token'); // elimina la cookie con el JWT
-  res.redirect('/login');   // redirige al login
+  res.clearCookie('token');
+  res.redirect('/login');
 });
 
 module.exports = router;
